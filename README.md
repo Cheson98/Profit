@@ -9,7 +9,8 @@ Dit is geen app van de politie en heeft geen politielogo; het embleem is een eig
 1. Open op je Android-telefoon de pagina [Releases](../../releases/latest) van deze repository.
 2. Tik onder **Assets** op `Q8-Oefentest.apk`.
 3. Open het gedownloade bestand. Android vraagt eenmalig of je installatie uit deze bron toestaat (Chrome of Bestanden). Sta dat toe en tik op **Installeer**.
-4. Bij het eerste gebruik vraagt de app toestemming voor meldingen. Die heb je nodig voor de herinneringen.
+4. Zet je bij **Instellingen** een herinnering aan, dan vraagt Android om toestemming voor meldingen. Die heb je nodig voor de herinneringen.
+5. Zet het mediavolume van je telefoon hoog genoeg: de signalen komen via het mediavolume.
 
 Een nieuwe versie installeer je gewoon over de oude heen. Je gegevens blijven dan bewaard.
 
