@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Q8 Oefentest</string>
+    <string name="notif_channel">Trainingsherinneringen</string>
+    <string name="notif_channel_desc">Herinneringen om de sporttest te oefenen</string>
+    <string name="notif_title">Tijd om te trainen</string>
+    <string name="notif_text">Je Q8-oefentest staat gepland. Tik om te starten.</string>
+    <string name="notif_test_title">Testmelding</string>
+    <string name="notif_test_text">Meldingen werken. Je herinneringen komen op deze manier binnen.</string>
+</resources>
