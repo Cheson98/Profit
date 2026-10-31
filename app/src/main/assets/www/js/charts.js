@@ -53,7 +53,6 @@
     if (opts.kind !== 'time' && hi >= 100) {
       svg += '<line class="target" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(100).toFixed(1) +
         '" y2="' + y(100).toFixed(1) + '"/>';
-      svg += '<text class="tg" x="' + (W - R) + '" y="' + (y(100) - 4).toFixed(1) + '" text-anchor="end">norm</text>';
     }
 
     // lijn

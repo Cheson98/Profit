@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Q8 Oefentest</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header id="top">
+      <!-- eigen neutraal embleem: schild met vinkje (geen politielogo) -->
+      <svg class="emb" viewBox="26 22 56 66" aria-hidden="true">
+        <path d="M54,26 L78,34 L78,54 C78,68 68,78 54,84 C40,78 30,68 30,54 L30,34 Z" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linejoin="round"/>
+        <path d="M42,54 L51,63 L67,45" fill="none" stroke="#C9A45C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>Q8 Oefentest</h1>
+      <span class="sub">onofficieel</span>
+    </header>
+    <main id="view" aria-live="off"></main>
+    <nav id="tabs" aria-label="Hoofdmenu"></nav>
+  </div>
+  <div id="layer"></div>
+
+  <script src="js/norms.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/results.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
