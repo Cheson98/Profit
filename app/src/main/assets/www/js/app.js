@@ -85,7 +85,41 @@
     exactSettings: function () { try { if (HAS) window.Android.openExactAlarmSettings(); } catch (e) { /* */ } },
     setReminder: function (json) { try { if (HAS) window.Android.setReminder(json); } catch (e) { /* */ } },
     nextAt: function () { try { return HAS ? String(window.Android.nextReminderAt()) : '-1'; } catch (e) { return '-1'; } },
-    testNotif: function () { try { if (HAS) window.Android.testNotification(); } catch (e) { /* */ } }
+    testNotif: function () { try { if (HAS) window.Android.testNotification(); } catch (e) { /* */ } },
+    version: function () { try { return HAS && window.Android.appVersion ? String(window.Android.appVersion() || '') : ''; } catch (e) { return ''; } },
+
+    // bestand bewaren: via Android (bestandskiezer), in een browser als download
+    exportFile: function (name, json) {
+      try {
+        if (HAS && window.Android.exportData) { window.Android.exportData(name, json); return; }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+        window.__onExportDone(true);
+      } catch (e) { window.__onExportDone(false); }
+    },
+    // bestand kiezen: via Android (bestandskiezer), in een browser met een bestandsveld
+    importFile: function () {
+      try {
+        if (HAS && window.Android.importData) { window.Android.importData(); return; }
+        var inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = '.json,application/json';
+        inp.onchange = function () {
+          var f = inp.files && inp.files[0];
+          if (!f) return;
+          var fr = new FileReader();
+          fr.onload = function () { window.__onImportData(String(fr.result), null); };
+          fr.onerror = function () { window.__onImportData(null, 'read'); };
+          fr.readAsText(f);
+        };
+        inp.click();
+      } catch (e) { window.__onImportData(null, 'read'); }
+    }
   };
 
   var actx = null;
@@ -419,9 +453,13 @@
 
     h += reminderHTML();
 
-    h += '<section class="sec"><h2>Gegevens</h2><p class="meta" style="margin-bottom:8px">Alles blijft op deze telefoon.</p>' +
+    var ver = B.version();
+    h += '<section class="sec"><h2>Gegevens</h2><p class="meta">Alles blijft op deze telefoon. Bewaar een back-up als bestand, bijvoorbeeld in Google Drive of Downloads. ' +
+      'Zo raak je je resultaten en instellingen niet kwijt als je de app verwijdert of een andere telefoon krijgt.</p>' +
+      '<div class="row2" style="margin:14px 0 8px"><button class="btn" data-a="backup-export">Back-up maken</button><button class="btn" data-a="backup-import">Back-up terugzetten</button></div>' +
       '<button class="link danger" data-a="wipe-ask">Alle resultaten verwijderen</button>' +
-      '<p class="hint" style="margin-top:16px">Onofficiële oefenapp, niet van de politie. De normen komen uit de Q8-doelstellingen en de geschaalde roeinormen die je hebt aangeleverd.</p></section>';
+      '<p class="hint" style="margin-top:16px">Onofficiële oefenapp, niet van de politie. De normen komen uit de Q8-doelstellingen en de geschaalde roeinormen die je hebt aangeleverd.' +
+      (ver ? ' Versie ' + esc(ver) + '.' : '') + '</p></section>';
     return h;
   }
 
@@ -732,6 +770,41 @@
     ask({ title: 'Alle resultaten verwijderen?', text: 'Je geschiedenis en grafieken zijn daarna leeg. Je instellingen blijven.', ok: 'Alles verwijderen', cancel: 'Behouden', danger: true,
       run: function () { S.sessions = []; persist(); render(); toast('Resultaten verwijderd'); } });
   };
+  // ---- back-up ----
+  A['backup-export'] = function () {
+    var now = Date.now();
+    B.exportFile(Q8Backup.fileName(now), JSON.stringify(Q8Backup.build(S, now), null, 2));
+  };
+  A['backup-import'] = function () { B.importFile(); };
+
+  window.__onExportDone = function (ok) {
+    if (ok === null) return;   // geannuleerd in de bestandskiezer
+    toast(ok ? 'Back-up opgeslagen' : 'Opslaan is niet gelukt');
+  };
+  window.__onImportData = function (text, err) {
+    if (text == null) {
+      if (err !== 'cancel') toast('Het bestand kon niet worden gelezen');
+      return;
+    }
+    var r = Q8Backup.parse(text, { defaults: DEFAULTS, limits: LIM, today: todayISO() });
+    if (!r.ok) { toast(r.error); return; }
+    var m = Q8Backup.merge(S.sessions, r.data.sessions);
+    var n = r.data.sessions.length;
+    var msg = 'In het bestand ' + (n === 1 ? 'staat 1 test' : 'staan ' + n + ' tests') + ', waarvan ' + m.added + ' nieuw voor deze telefoon. ' +
+      'Die worden toegevoegd; je huidige resultaten blijven staan. Ook je gegevens, tijden en herinnering uit het bestand worden overgenomen.' +
+      (r.skipped ? ' ' + r.skipped + ' ongeldige ' + (r.skipped === 1 ? 'test is' : 'tests zijn') + ' overgeslagen.' : '');
+    ask({ title: 'Back-up terugzetten?', text: msg, ok: 'Terugzetten', cancel: 'Annuleren', danger: false, run: function () {
+      var p = r.data.profile;
+      S.sessions = m.sessions;
+      if (p && p.gender && p.age != null && p.weight != null) S.profile = p;
+      S.settings = r.data.settings;
+      S.reminder = r.data.reminder;
+      syncReminder();
+      render();
+      toast(m.added === 1 ? '1 test teruggezet' : m.added + ' tests teruggezet');
+    } });
+  };
+
   A['confirm-no'] = function () { ui.confirm = null; renderLayer(); };
   A['confirm-yes'] = function () {
     var c = ui.confirm;

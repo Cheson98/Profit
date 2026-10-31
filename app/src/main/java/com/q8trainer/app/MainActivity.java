@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.media.AudioManager;
@@ -29,14 +30,26 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+
 /**
  * Toont de app (HTML/JS in assets/www) in een WebView en biedt een kleine brug ("Android")
  * voor wat een webpagina zelf niet kan: opslag, geluid, trillen, scherm aan en meldingen.
  */
 public class MainActivity extends Activity {
     private static final String START_URL = "file:///android_asset/www/index.html";
+    private static final int REQ_EXPORT = 4101;
+    private static final int REQ_IMPORT = 4102;
+    private static final int MAX_IMPORT_BYTES = 8 * 1024 * 1024;
 
     private WebView webView;
+    private String pendingExport;
     private ToneGenerator tone;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -110,6 +123,69 @@ public class MainActivity extends Activity {
         return getSharedPreferences(ReminderScheduler.PREFS, Context.MODE_PRIVATE);
     }
 
+    private void callJs(final String js) {
+        runOnUiThread(() -> {
+            if (webView != null) {
+                webView.evaluateJavascript(js, null);
+            }
+        });
+    }
+
+    // ---- back-up: bestand opslaan en kiezen ---------------------------------------------
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_EXPORT) {
+            String json = pendingExport;
+            pendingExport = null;
+            if (resultCode != RESULT_OK || data == null || data.getData() == null || json == null) {
+                callJs("window.__onExportDone && window.__onExportDone(null)");
+                return;
+            }
+            boolean ok = false;
+            try (OutputStream out = getContentResolver().openOutputStream(data.getData(), "wt")) {
+                if (out != null) {
+                    out.write(json.getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                    ok = true;
+                }
+            } catch (IOException | RuntimeException e) {
+                ok = false;
+            }
+            callJs("window.__onExportDone && window.__onExportDone(" + ok + ")");
+        } else if (requestCode == REQ_IMPORT) {
+            if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+                callJs("window.__onImportData && window.__onImportData(null, 'cancel')");
+                return;
+            }
+            String text = null;
+            try (InputStream in = getContentResolver().openInputStream(data.getData())) {
+                if (in != null) {
+                    ByteArrayOutputStream buf = new ByteArrayOutputStream();
+                    byte[] chunk = new byte[8192];
+                    int n;
+                    int total = 0;
+                    while ((n = in.read(chunk)) > 0) {
+                        total += n;
+                        if (total > MAX_IMPORT_BYTES) {
+                            throw new IOException("bestand te groot");
+                        }
+                        buf.write(chunk, 0, n);
+                    }
+                    text = new String(buf.toByteArray(), StandardCharsets.UTF_8);
+                }
+            } catch (IOException | RuntimeException e) {
+                text = null;
+            }
+            if (text == null) {
+                callJs("window.__onImportData && window.__onImportData(null, 'read')");
+            } else {
+                callJs("window.__onImportData && window.__onImportData(" + JSONObject.quote(text) + ", null)");
+            }
+        }
+    }
+
     // ---- geluid en trillen -------------------------------------------------------------
 
     private void toneAt(int toneType, int durationMs, long delayMs) {
@@ -166,6 +242,47 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void saveState(String json) {
             prefs().edit().putString("state", json).apply();
+        }
+
+        @JavascriptInterface
+        public void exportData(final String filename, final String json) {
+            runOnUiThread(() -> {
+                pendingExport = json;
+                try {
+                    Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("application/json");
+                    i.putExtra(Intent.EXTRA_TITLE, filename);
+                    startActivityForResult(i, REQ_EXPORT);
+                } catch (RuntimeException e) {
+                    pendingExport = null;
+                    callJs("window.__onExportDone && window.__onExportDone(false)");
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void importData() {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("*/*");
+                    startActivityForResult(i, REQ_IMPORT);
+                } catch (RuntimeException e) {
+                    callJs("window.__onImportData && window.__onImportData(null, 'read')");
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public String appVersion() {
+            try {
+                PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+                return info.versionName == null ? "" : info.versionName;
+            } catch (Exception e) {
+                return "";
+            }
         }
 
         @JavascriptInterface

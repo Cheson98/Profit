@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Q8Oefentest"
+rootProject.name = "Profit"
 include ':app'

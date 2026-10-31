@@ -2,6 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
+// De bouw op GitHub geeft elk versienummer door (oplopend), zodat een nieuwe versie
+// altijd over de vorige heen te installeren is. Lokaal bouwen gebruikt 1 / 1.0.
+def appVersionCode = (project.findProperty('appVersionCode') ?: '1').toString().toInteger()
+def appVersionName = (project.findProperty('appVersionName') ?: '1.0').toString()
+
 android {
     namespace 'com.q8trainer.app'
     compileSdk 34
@@ -10,8 +15,8 @@ android {
         applicationId 'com.q8trainer.app'
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode appVersionCode
+        versionName appVersionName
     }
 
     // Vaste sleutel (app/debug.keystore), zodat een nieuwe versie altijd over de

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Q8 Oefentest</string>
+    <string name="app_name">Profit</string>
     <string name="notif_channel">Trainingsherinneringen</string>
     <string name="notif_channel_desc">Herinneringen om de sporttest te oefenen</string>
     <string name="notif_title">Tijd om te trainen</string>

@@ -216,5 +216,71 @@ ok('grafiek: normlijn', svg.indexOf('class="target"') > 0);
 ok('grafiek: één punt werkt ook', C.line([{ v: 80, label: 'x', pass: false }], { kind: 'pct' }).indexOf('<circle') > 0);
 ok('grafiek: tijden', C.line([{ v: 130, label: 'a' }, { v: 120, label: 'b' }], { kind: 'time' }).indexOf('class="target"') < 0);
 
+// ---------------- back-up ----------------
+var Bk = require(path.join(www, 'backup.js'));
+var DEFS = { countdown: 10, restRow: 420, exSeconds: 60, restBetween: 180, restRun: 540, pullupPos: 5, sound: true, vibrate: true, ticks: true };
+var LIMITS = { countdown: { min: 0, max: 60 }, restRow: { min: 60, max: 900 }, exSeconds: { min: 30, max: 180 }, restBetween: { min: 30, max: 600 }, restRun: { min: 60, max: 900 } };
+var OPTS = { defaults: DEFS, limits: LIMITS, today: '2026-10-31' };
+var bstate = {
+  profile: { gender: 'f', age: 34, weight: 62 },
+  settings: Object.assign({}, DEFS, { pullupPos: 2, sound: false }),
+  reminder: { enabled: true, mode: 'interval', days: [1, 3, 5], interval: 4, anchor: '2026-11-02', hour: 7, minute: 30 },
+  sessions: [s1, s2]
+};
+var bfile = JSON.stringify(Bk.build(bstate, Date.UTC(2026, 9, 31, 12, 0)), null, 2);
+var back = Bk.parse(bfile, OPTS);
+ok('back-up: terug te lezen', back.ok === true);
+eq('back-up: aantal tests', back.data.sessions.length, 2);
+eq('back-up: niets overgeslagen', back.skipped, 0);
+eq('back-up: eerste test identiek', JSON.stringify(back.data.sessions[0]), JSON.stringify(s1));
+eq('back-up: tweede test identiek', JSON.stringify(back.data.sessions[1]), JSON.stringify(s2));
+eq('back-up: gegevens', back.data.profile, bstate.profile);
+eq('back-up: instellingen', back.data.settings, bstate.settings);
+eq('back-up: herinnering', back.data.reminder, bstate.reminder);
+eq('back-up: bestandsnaam', Bk.fileName(new Date(2026, 9, 31, 12).getTime()), 'profit-back-up-2026-10-31.json');
+eq('back-up: lopende test zit er niet in', Object.prototype.hasOwnProperty.call(JSON.parse(bfile), 'active'), false);
+
+// beschadigde of vreemde bestanden
+eq('geen JSON', Bk.parse('dit is geen json', OPTS).ok, false);
+eq('lege inhoud', Bk.parse('', OPTS).ok, false);
+eq('JSON van iets anders', Bk.parse('{"format":"iets-anders","sessions":[]}', OPTS).ok, false);
+eq('JSON-lijst in plaats van object', Bk.parse('[1,2,3]', OPTS).ok, false);
+var newer = Bk.parse('{"format":"profit-backup","version":2,"sessions":[]}', OPTS);
+ok('nieuwere versie wordt geweigerd', newer.ok === false && /nieuwere/.test(newer.error));
+ok('te veel tests wordt geweigerd', Bk.parse(JSON.stringify({ format: 'profit-backup', version: 1, sessions: new Array(5001).fill(null) }), OPTS).ok === false);
+
+// opschonen van onzin in een verder geldig bestand
+var dirty = JSON.parse(bfile);
+var evil = JSON.parse(JSON.stringify(s1));
+evil.id = 'evil';
+evil.order = ['__proto__'];
+var zeroNorm = JSON.parse(JSON.stringify(s1)); zeroNorm.id = 'zero'; zeroNorm.norms.squats = 0;
+var noProfile = JSON.parse(JSON.stringify(s1)); noProfile.id = 'noprof'; noProfile.profile = { gender: 'x', age: 5, weight: 1 };
+var longId = JSON.parse(JSON.stringify(s1)); longId.id = new Array(60).join('a');
+dirty.sessions = [s1, { id: 'x' }, null, 'tekst', s1, evil, zeroNorm, noProfile, longId, s2];
+dirty.settings = { countdown: 9999, restRow: 'veel', pullupPos: 17, sound: 'ja', vibrate: false, onbekend: 1 };
+dirty.reminder = { enabled: 'ja', mode: 'raar', days: [0, 3, 3, 9, 'a', 7], interval: 99, anchor: 'morgen', hour: 99, minute: -4 };
+dirty.profile = { gender: 'x', age: 5, weight: 'zwaar' };
+var d = Bk.parse(JSON.stringify(dirty), OPTS);
+ok('vuil bestand wordt toch gelezen', d.ok === true);
+eq('alleen geldige unieke tests blijven over', d.data.sessions.map(function (x) { return x.id; }), [s1.id, s2.id]);
+eq('overgeslagen tests geteld', d.skipped, 8);
+eq('instellingen opgeschoond', d.data.settings, { countdown: 60, restRow: 420, exSeconds: 60, restBetween: 180, restRun: 540, pullupPos: 5, sound: true, vibrate: false, ticks: true });
+eq('herinnering opgeschoond', d.data.reminder, { enabled: false, mode: 'weekdays', days: [3, 7], interval: 30, anchor: '2026-10-31', hour: 23, minute: 0 });
+eq('ongeldige gegevens worden leeg', d.data.profile, { gender: null, age: null, weight: null });
+ok('onbekende instelling wordt niet overgenomen', !('onbekend' in d.data.settings));
+ok('prototype blijft ongemoeid', ({}).polluted === undefined);
+
+// samenvoegen
+var m1 = Bk.merge([s1], [JSON.parse(JSON.stringify(s1)), s2]);
+eq('samenvoegen: 1 nieuw', m1.added, 1);
+eq('samenvoegen: 2 in totaal, op datum', m1.sessions.map(function (x) { return x.id; }), [s1.id, s2.id]);
+var m2 = Bk.merge([s2, s1], [s1, s2]);
+eq('samenvoegen: niets nieuw', m2.added, 0);
+eq('samenvoegen: bestaande blijven staan en worden op datum gezet', m2.sessions.map(function (x) { return x.id; }), [s1.id, s2.id]);
+var cur = [s1];
+Bk.merge(cur, [s2]);
+eq('samenvoegen wijzigt de huidige lijst niet', cur.length, 1);
+
 console.log(failures === 0 ? 'JavaScript-tests OK (' + checks + ' controles)' : failures + ' van ' + checks + ' controles mislukt');
 process.exit(failures === 0 ? 0 : 1);

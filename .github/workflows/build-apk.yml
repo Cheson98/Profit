@@ -40,18 +40,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Bouw APK
-        run: ./gradlew --no-daemon assembleRelease
+        run: ./gradlew --no-daemon assembleRelease -PappVersionCode=${{ github.run_number }} -PappVersionName=1.${{ github.run_number }}
 
       - name: Geef de APK een duidelijke naam
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/Q8-Oefentest.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/Profit.apk
           ls -l dist
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Q8-Oefentest-apk
-          path: dist/Q8-Oefentest.apk
+          name: Profit-apk
+          path: dist/Profit.apk
           if-no-files-found: error
 
       - name: Publiceer als release
@@ -60,8 +60,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v1.${{ github.run_number }}"
-          gh release create "$TAG" dist/Q8-Oefentest.apk \
+          gh release create "$TAG" dist/Profit.apk \
             --target "$GITHUB_SHA" \
-            --title "Q8 Oefentest $TAG" \
-            --notes "Download **Q8-Oefentest.apk** hieronder en open het bestand op je Android-telefoon. Zie de README voor de installatie." \
+            --title "Profit $TAG" \
+            --notes "Download **Profit.apk** hieronder en open het bestand op je Android-telefoon. Zie de README voor de installatie." \
             --latest

@@ -1,13 +1,13 @@
-# Q8 Oefentest (Android)
+# Profit
 
-Onofficiële oefenapp voor de Q8-sporttest. Je vult één keer je geslacht, leeftijd en gewicht in. De app zet daarna de normen klaar, loopt de hele test af met automatische timers en houdt je resultaten bij.
+Profit is een onofficiële oefenapp voor Android voor de Q8-sporttest. Je vult één keer je geslacht, leeftijd en gewicht in. De app zet daarna de normen klaar, loopt de hele test af met automatische timers en houdt je resultaten bij.
 
 Dit is geen app van de politie en heeft geen politielogo; het embleem is een eigen, neutraal schildje.
 
 ## Downloaden en installeren
 
 1. Open op je Android-telefoon de pagina [Releases](../../releases/latest) van deze repository.
-2. Tik onder **Assets** op `Q8-Oefentest.apk`.
+2. Tik onder **Assets** op `Profit.apk`.
 3. Open het gedownloade bestand. Android vraagt eenmalig of je installatie uit deze bron toestaat (Chrome of Bestanden). Sta dat toe en tik op **Installeer**.
 4. Zet je bij **Instellingen** een herinnering aan, dan vraagt Android om toestemming voor meldingen. Die heb je nodig voor de herinneringen.
 5. Zet het mediavolume van je telefoon hoog genoeg: de signalen komen via het mediavolume.
@@ -43,6 +43,10 @@ Een nieuwe versie installeer je gewoon over de oude heen. Je gegevens blijven da
 - Het zijn echte Android-meldingen, ook als de app dicht is. Ze blijven werken na een herstart van je telefoon.
 - Laat je telefoon de melding een paar minuten te laat sturen? Geef bij **Instellingen** toestemming voor een exact tijdstip.
 
+**Back-up**
+- Bij **Instellingen** maak je met **Back-up maken** een bestand met al je resultaten, gegevens, tijden en herinnering. Je kiest zelf waar het komt, bijvoorbeeld in Google Drive of Downloads.
+- Met **Back-up terugzetten** kies je zo'n bestand weer. De app controleert het bestand en vraagt eerst om bevestiging. Tests die je al op de telefoon hebt blijven staan; de tests uit het bestand worden toegevoegd.
+
 ## Goed om te weten
 
 - Alles blijft op je telefoon. De app heeft geen internet nodig en maakt geen verbinding.
@@ -51,8 +55,9 @@ Een nieuwe versie installeer je gewoon over de oude heen. Je gegevens blijven da
 
 ## Voor ontwikkelaars
 
-- Techniek: een kleine Android-app (Java) die de schermen toont in een WebView (HTML/JS in `app/src/main/assets/www`), zonder externe bibliotheken. Java levert geluid, trilling, meldingen en opslag.
-- GitHub Actions (`.github/workflows/build-apk.yml`) draait de tests, bouwt de APK en publiceert die bij elke wijziging op `main` als release.
+- Techniek: een kleine Android-app (Java) die de schermen toont in een WebView (HTML/JS in `app/src/main/assets/www`), zonder externe bibliotheken. Java levert geluid, trilling, meldingen, opslag en het kiezen van back-upbestanden.
+- GitHub Actions (`.github/workflows/build-apk.yml`) draait de tests, bouwt de APK en publiceert die bij elke wijziging op `main` als release, met een oplopend versienummer.
 - Lokaal bouwen: open de map in Android Studio, of `./gradlew assembleRelease` (JDK 17 en Android SDK 34).
-- Tests: `node tests/js-tests.js` (normen, timers, resultaten) en de Java-test voor de herinneringen (zie de workflow).
+- Tests: `node tests/js-tests.js` (normen, timers, resultaten, back-up) en de Java-test voor de herinneringen (zie de workflow).
+- De technische app-id blijft `com.q8trainer.app`, zodat een nieuwe versie over een eerdere installatie heen werkt.
 - `app/debug.keystore` is bewust meegeleverd, zodat elke nieuwe versie over de vorige heen te installeren is. Het is een gewone debug-sleutel en geen geheim. Gebruik hem niet om apps in een store te zetten.
