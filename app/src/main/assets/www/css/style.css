@@ -238,3 +238,18 @@ body[data-phase="count"] .t-bar { color: var(--count); }
 @media (max-height: 640px) {
   .t-clock { font-size: clamp(72px, 30vw, 130px); }
 }
+
+/* ---- iPhone en webversie ---- */
+html { touch-action: manipulation; }
+@supports (height: 100dvh) { html, body { height: 100dvh; } }
+/* Onder de statusbalk en de thuisbalk van de iPhone blijft ruimte vrij (alleen bij beginscherm-app) */
+#app { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+.sheet { padding-bottom: calc(26px + env(safe-area-inset-bottom)); }
+.toast { bottom: calc(76px + env(safe-area-inset-bottom)); }
+body.testing { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.sheet textarea {
+  display: block; width: 100%; min-height: 120px; max-height: 40vh; margin: 0 0 14px; padding: 12px; resize: none;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; font-size: 16px; line-height: 1.35;
+}
+.tip { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-top: 12px; font-size: 14px; color: var(--mute); }
+.tip b { color: var(--text); }

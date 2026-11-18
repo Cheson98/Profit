@@ -1,0 +1,63 @@
+name: Publiceer webapp (iPhone)
+
+# Zet de app online op GitHub Pages, zodat hij op een iPhone of iPad op het beginscherm gezet kan worden.
+# Eenmalig instellen: Settings > Pages > Build and deployment > Source: "GitHub Actions".
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bouw:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Test normen, timers en resultaten (JavaScript)
+        run: node tests/js-tests.js
+
+      - name: Test webversie (herinneringen, agenda-bestand, offline-opslag)
+        run: node tests/web-tests.js
+
+      - name: Zet de site klaar met versienummer
+        run: |
+          VERSION="1.${{ github.run_number }}"
+          mkdir _site
+          cp -r app/src/main/assets/www/. _site/
+          touch _site/.nojekyll
+          sed -i "s/var VERSION = 'dev';/var VERSION = '${VERSION}';/" _site/sw.js
+          echo "window.PROFIT_VERSION = '${VERSION}';" > _site/version.js
+          grep -q "var VERSION = '${VERSION}';" _site/sw.js
+          grep -q "PROFIT_VERSION = '${VERSION}'" _site/version.js
+          find _site -type f | sort
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  publiceer:
+    needs: bouw
+    # alleen vanaf de standaardbranch van de repository (daar staat GitHub Pages op ingesteld)
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

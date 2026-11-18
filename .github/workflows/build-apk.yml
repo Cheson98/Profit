@@ -37,6 +37,9 @@ jobs:
         run: |
           if [ -f tests/js-tests.js ]; then node tests/js-tests.js; else echo "Geen JavaScript-tests gevonden"; fi
 
+      - name: Test webversie (herinneringen, agenda-bestand, offline-opslag)
+        run: node tests/web-tests.js
+
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Bouw APK

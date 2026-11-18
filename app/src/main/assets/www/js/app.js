@@ -4,12 +4,13 @@
 (function () {
   'use strict';
 
-  var N = window.Q8Norms, E = window.Q8Engine, R = window.Q8Results, C = window.Q8Charts;
+  var N = window.Q8Norms, E = window.Q8Engine, R = window.Q8Results, C = window.Q8Charts, RM = window.Q8Reminders;
   var HAS = typeof window.Android !== 'undefined' && window.Android !== null;
+  var W = window.ProfitWeb;   // webversie (iPhone en browsers): geluid, scherm aan, bestanden
 
   var A = {};      // acties, aangeroepen via data-a
   var run = null;  // lopende test
-  var ui = { tab: 'home', screen: null, chartEx: 'rowing', sheet: null, confirm: null, toast: '' };
+  var ui = { tab: 'home', screen: null, chartEx: 'rowing', sheet: null, confirm: null, toast: '', paste: null };
   var lastKey = '';
   var toastTimer = null;
 
@@ -74,32 +75,36 @@
     beep: function (kind) {
       try {
         if (HAS) window.Android.beep(kind, !!S.settings.sound, !!S.settings.vibrate);
-        else webBeep(kind);
+        else W.beep(kind, !!S.settings.sound, !!S.settings.vibrate);
       } catch (e) { /* geen geluid */ }
     },
-    keepOn: function (on) { try { if (HAS) window.Android.keepScreenOn(!!on); } catch (e) { /* */ } },
+    keepOn: function (on) {
+      try { if (HAS) window.Android.keepScreenOn(!!on); else { W.keepAwake(on); if (!on) W.release(); } } catch (e) { /* */ }
+    },
+    // in de browser: geluid pas na een tik van de gebruiker toegestaan
+    unlock: function () { try { if (!HAS) W.unlock(); } catch (e) { /* */ } },
     notifOk: function () { try { return HAS ? !!window.Android.notificationsAllowed() : true; } catch (e) { return true; } },
     askNotif: function () { try { if (HAS) window.Android.requestNotificationPermission(); } catch (e) { /* */ } },
     notifSettings: function () { try { if (HAS) window.Android.openNotificationSettings(); } catch (e) { /* */ } },
     exactOk: function () { try { return HAS ? !!window.Android.canExactAlarms() : true; } catch (e) { return true; } },
     exactSettings: function () { try { if (HAS) window.Android.openExactAlarmSettings(); } catch (e) { /* */ } },
     setReminder: function (json) { try { if (HAS) window.Android.setReminder(json); } catch (e) { /* */ } },
-    nextAt: function () { try { return HAS ? String(window.Android.nextReminderAt()) : '-1'; } catch (e) { return '-1'; } },
+    nextAt: function () {
+      try { return HAS ? String(window.Android.nextReminderAt()) : String(RM.nextTrigger(S.reminder, Date.now())); } catch (e) { return '-1'; }
+    },
     testNotif: function () { try { if (HAS) window.Android.testNotification(); } catch (e) { /* */ } },
-    version: function () { try { return HAS && window.Android.appVersion ? String(window.Android.appVersion() || '') : ''; } catch (e) { return ''; } },
+    version: function () {
+      try {
+        if (HAS) return window.Android.appVersion ? String(window.Android.appVersion() || '') : '';
+        return window.PROFIT_VERSION ? String(window.PROFIT_VERSION) : '';
+      } catch (e) { return ''; }
+    },
 
-    // bestand bewaren: via Android (bestandskiezer), in een browser als download
+    // bestand bewaren: via Android (bestandskiezer), in de browser via het deelmenu of als download
     exportFile: function (name, json) {
       try {
         if (HAS && window.Android.exportData) { window.Android.exportData(name, json); return; }
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-        window.__onExportDone(true);
+        W.saveFile(name, json, 'application/json', function (ok) { window.__onExportDone(ok); });
       } catch (e) { window.__onExportDone(false); }
     },
     // bestand kiezen: via Android (bestandskiezer), in een browser met een bestandsveld
@@ -121,26 +126,6 @@
       } catch (e) { window.__onImportData(null, 'read'); }
     }
   };
-
-  var actx = null;
-  function webBeep(kind) {
-    if (S.settings.vibrate && navigator.vibrate) {
-      navigator.vibrate(kind === 'start' ? [700] : kind === 'stop' ? [220, 200, 220, 200, 220] : [60]);
-    }
-    if (!S.settings.sound) return;
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    var seq = kind === 'start' ? [[880, 0, 0.7]]
-      : kind === 'stop' ? [[440, 0, 0.22], [440, 0.42, 0.22], [440, 0.84, 0.22]]
-        : [[1000, 0, 0.09]];
-    seq.forEach(function (n) {
-      var o = actx.createOscillator(), g = actx.createGain();
-      o.frequency.value = n[0];
-      o.connect(g); g.connect(actx.destination);
-      var t = actx.currentTime + n[1];
-      g.gain.setValueAtTime(0.2, t);
-      o.start(t); o.stop(t + n[2]);
-    });
-  }
 
   function loadState() {
     var o = {};
@@ -218,7 +203,7 @@
     var d = new Date(ms);
     var day = '';
     try { day = d.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' }); } catch (e) { day = fmtDate(ms); }
-    return 'Volgende herinnering: ' + day + ' om ' + fmtTimeOfDay(ms);
+    return (HAS ? 'Volgende herinnering: ' : 'Volgende training: ') + day + ' om ' + fmtTimeOfDay(ms);
   }
   function syncReminder() {
     persist();
@@ -229,6 +214,14 @@
   function segBtn(action, val, label, on) {
     return '<button data-a="' + action + '" data-v="' + esc(val) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(label) + '</button>';
   }
+  // ---------- webversie (iPhone) ----------
+  function hintSeen() { try { return localStorage.getItem('profit_hint_install') === '1'; } catch (e) { return false; } }
+  function needsInstallHint() { return !HAS && W.isIOS() && !W.isStandalone() && !hintSeen(); }
+  function trainedToday() {
+    var t = RM.localDay(new Date());
+    return S.sessions.some(function (x) { return RM.localDay(new Date(x.ts)) === t; });
+  }
+
   // ---------- weergave: hoofdschermen ----------
   function normsHTML() {
     var h = '<h2>Jouw normen</h2>';
@@ -247,6 +240,9 @@
       S.settings.pullupPos + ' tussen roeien en hardlopen; dat pas je aan bij Instellingen.</p>' +
       '<p class="hint" style="margin:6px 0 16px">Duur: ongeveer ' + mins + ' minuten' + (norms.rowing == null ? ' plus de roeitijd' : '') + '.</p>' +
       '<button class="btn primary wide" data-a="start">Start test</button>';
+    if (!HAS && !W.canKeepAwake()) {
+      h += '<p class="hint warn">Deze browser kan het scherm niet vanzelf aan houden. Zet het scherm tijdens de test op "nooit vergrendelen" (iPhone: Instellingen, Scherm en helderheid, Automatisch vergrendelen).</p>';
+    }
     return h;
   }
 
@@ -256,6 +252,13 @@
       h += '<div class="banner"><p>Er loopt nog een test van ' + esc(fmtTimeOfDay(S.active.session.ts)) + '.</p>' +
         '<button class="btn sm" data-a="discard-active">Weggooien</button>' +
         '<button class="btn sm primary" data-a="resume">Hervat</button></div>';
+    }
+    if (needsInstallHint()) {
+      h += '<div class="banner"><p><b>Zet Profit op je beginscherm.</b> Tik op Deel (vierkantje met pijl), kies "Zet op beginscherm" en open Profit daarna via het icoon. Alleen zo blijven je resultaten bewaard en werkt de app zonder internet.</p>' +
+        '<button class="btn sm" data-a="hint-ok">Begrepen</button></div>';
+    }
+    if (!HAS && RM.dueToday(S.reminder, Date.now()) && !trainedToday() && !S.active) {
+      h += '<div class="banner"><p>Vandaag staat er een training gepland om ' + esc(pad2(S.reminder.hour) + ':' + pad2(S.reminder.minute)) + '.</p></div>';
     }
     var pend = pendingTotal();
     if (pend.n) {
@@ -392,7 +395,7 @@
 
   function reminderHTML() {
     var r = S.reminder;
-    var h = '<section class="sec"><h2>Herinneringen</h2>' + swRow('rem-enabled', 'Herinner me aan oefenen', 'Je krijgt een melding op het ingestelde moment.', r.enabled);
+    var h = '<section class="sec"><h2>Herinneringen</h2>' + swRow('rem-enabled', 'Herinner me aan oefenen', HAS ? 'Je krijgt een melding op het ingestelde moment.' : 'Op het startscherm zie je op trainingsdagen een herinnering.', r.enabled);
     if (!r.enabled) return h + '</section>';
     h += '<div class="seg" style="margin-top:14px" role="group" aria-label="Hoe vaak">' +
       segBtn('rem-mode', 'weekdays', 'Vaste dagen', r.mode !== 'interval') + segBtn('rem-mode', 'interval', 'Om de zoveel dagen', r.mode === 'interval') + '</div>';
@@ -425,6 +428,10 @@
           '<button class="btn sm" style="margin-top:10px" data-a="rem-exact">Exact tijdstip toestaan</button>';
       }
       h += '<button class="link" data-a="rem-test">Stuur een testmelding</button>';
+    } else {
+      h += '<div class="tip"><b>Melding op je telefoon</b><br>Een webapp kan zelf geen melding sturen als hij dicht is. Zet de herinnering daarom ook in je Agenda: die geeft op het ingestelde tijdstip wel een melding.</div>' +
+        '<button class="btn" style="margin-top:12px" data-a="rem-ics">Zet in Agenda</button>' +
+        '<p class="hint">Lukt dat niet? Maak zelf een herhalende herinnering in de app Herinneringen of Klok, met het schema hierboven.</p>';
     }
     return h + '</section>';
   }
@@ -447,16 +454,19 @@
 
     h += '<section class="sec"><h2>Signalen</h2>' +
       swRow('set-sound', 'Geluid', 'Lange piep bij beginnen, drie korte bij stoppen.', s.sound) +
-      swRow('set-vibrate', 'Trillen', '', s.vibrate) +
+      (HAS || W.canVibrate() ? swRow('set-vibrate', 'Trillen', '', s.vibrate) : '') +
       swRow('set-ticks', 'Piepjes in de laatste 3 seconden', '', s.ticks) +
-      '<div class="row2" style="margin-top:12px"><button class="btn sm" data-a="sig" data-v="start">Hoor beginnen</button><button class="btn sm" data-a="sig" data-v="stop">Hoor stoppen</button></div></section>';
+      '<div class="row2" style="margin-top:12px"><button class="btn sm" data-a="sig" data-v="start">Hoor beginnen</button><button class="btn sm" data-a="sig" data-v="stop">Hoor stoppen</button></div>' +
+      (HAS ? '' : '<p class="hint">Zet het volume hoog. Hoor je niets, zet dan de stilteschakelaar van je telefoon uit. Trillen kan een webapp op een iPhone niet.</p>') + '</section>';
 
     h += reminderHTML();
 
     var ver = B.version();
-    h += '<section class="sec"><h2>Gegevens</h2><p class="meta">Alles blijft op deze telefoon. Bewaar een back-up als bestand, bijvoorbeeld in Google Drive of Downloads. ' +
+    h += '<section class="sec"><h2>Gegevens</h2><p class="meta">Alles blijft op deze telefoon. ' +
+      (HAS ? 'Bewaar een back-up als bestand, bijvoorbeeld in Google Drive of Downloads. ' : 'Bewaar een back-up als bestand, bijvoorbeeld in Bestanden of iCloud Drive. ') +
       'Zo raak je je resultaten en instellingen niet kwijt als je de app verwijdert of een andere telefoon krijgt.</p>' +
       '<div class="row2" style="margin:14px 0 8px"><button class="btn" data-a="backup-export">Back-up maken</button><button class="btn" data-a="backup-import">Back-up terugzetten</button></div>' +
+      (HAS ? '' : '<div class="row2" style="margin:0 0 8px"><button class="link" data-a="backup-copy">Kopieer als tekst</button><button class="link" data-a="backup-paste">Plak als tekst</button></div>') +
       '<button class="link danger" data-a="wipe-ask">Alle resultaten verwijderen</button>' +
       '<p class="hint" style="margin-top:16px">Onofficiële oefenapp, niet van de politie. De normen komen uit de Q8-doelstellingen en de geschaalde roeinormen die je hebt aangeleverd.' +
       (ver ? ' Versie ' + esc(ver) + '.' : '') + '</p></section>';
@@ -645,6 +655,10 @@
           '<button data-a="cnt" data-d="1" aria-label="Meer">+</button></div><button class="btn primary wide" data-a="ans-save">Opslaan</button>';
       }
       h += '</div>';
+    } else if (ui.paste) {
+      h += '<div class="scrim" data-a="paste-close"></div><div class="sheet" role="dialog" aria-modal="true" aria-label="Back-up plakken"><h3>Back-up plakken</h3>' +
+        '<p>Plak hier de tekst van je back-up.</p><textarea data-in="paste" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Tekst van de back-up">' + esc(ui.paste.text) + '</textarea>' +
+        '<div class="row2"><button class="btn" data-a="paste-close">Annuleren</button><button class="btn primary" data-a="paste-ok">Verder</button></div></div>';
     } else if (ui.confirm) {
       var c = ui.confirm;
       h += '<div class="scrim" data-a="confirm-no"></div><div class="sheet" role="alertdialog" aria-modal="true"><h3>' + esc(c.title) + '</h3><p>' + esc(c.text) + '</p>' +
@@ -684,6 +698,7 @@
   A.back = function () { ui.screen = null; render(); };
 
   A.start = function () {
+    B.unlock();
     var norms = N.normsFor(calcProfile());
     if (!norms) return;
     var plan = E.buildPlan(S.settings, norms);
@@ -692,7 +707,7 @@
     S.active = null;
     beginRun(plan, session, null);
   };
-  A.resume = function () { if (S.active) beginRun(S.active.plan, S.active.session, S.active.snap); };
+  A.resume = function () { B.unlock(); if (S.active) beginRun(S.active.plan, S.active.session, S.active.snap); };
   A['discard-active'] = function () {
     ask({ title: 'Lopende test weggooien?', text: 'Wat je tot nu toe hebt gedaan wordt niet bewaard.', ok: 'Weggooien', cancel: 'Behouden', danger: true,
       run: function () { S.active = null; persist(); render(); } });
@@ -776,6 +791,21 @@
     B.exportFile(Q8Backup.fileName(now), JSON.stringify(Q8Backup.build(S, now), null, 2));
   };
   A['backup-import'] = function () { B.importFile(); };
+  A['backup-copy'] = function () {
+    var now = Date.now();
+    W.copyText(JSON.stringify(Q8Backup.build(S, now), null, 2), function (ok) {
+      toast(ok ? 'Back-up gekopieerd. Plak hem in een notitie of mail.' : 'Kopiëren is niet gelukt');
+    });
+  };
+  A['backup-paste'] = function () { ui.paste = { text: '' }; renderLayer(); };
+  A['paste-close'] = function () { ui.paste = null; renderLayer(); };
+  A['paste-ok'] = function () {
+    var t = ui.paste ? ui.paste.text.trim() : '';
+    if (!t) { toast('Plak eerst de tekst van je back-up'); return; }
+    ui.paste = null;
+    window.__onImportData(t, null);
+  };
+  A['hint-ok'] = function () { try { localStorage.setItem('profit_hint_install', '1'); } catch (e) { /* */ } render(); };
 
   window.__onExportDone = function (ok) {
     if (ok === null) return;   // geannuleerd in de bestandskiezer
@@ -825,7 +855,7 @@
     ['countdown', 'restRow', 'exSeconds', 'restBetween', 'restRun'].forEach(function (k) { S.settings[k] = DEFAULTS[k]; });
     persist(); render(); toast('Standaardtijden teruggezet');
   };
-  A.sig = function (el) { B.beep(el.dataset.v); };
+  A.sig = function (el) { B.unlock(); B.beep(el.dataset.v); };
 
   A['rem-mode'] = function (el) { S.reminder.mode = el.dataset.v; syncReminder(); render(); };
   A['rem-day'] = function (el) {
@@ -843,8 +873,17 @@
   A['rem-notif-settings'] = function () { B.notifSettings(); };
   A['rem-exact'] = function () { B.exactSettings(); };
   A['rem-test'] = function () { B.testNotif(); toast('Testmelding verstuurd'); };
+  A['rem-ics'] = function () {
+    var text = RM.ics(S.reminder, Date.now());
+    if (!text) { toast('Kies eerst minstens één dag'); return; }
+    W.saveFile('profit-herinnering.ics', text, 'text/calendar', function (ok) {
+      if (ok === null) return;
+      toast(ok ? 'Agenda-bestand klaar. Kies Agenda om het toe te voegen.' : 'Dat is niet gelukt');
+    });
+  };
 
   document.addEventListener('click', function (e) {
+    if (!HAS) W.nudge();
     var el = e.target.closest ? e.target.closest('[data-a]') : null;
     if (!el || el.disabled) return;
     var fn = A[el.getAttribute('data-a')];
@@ -864,6 +903,8 @@
       persist(); refreshNorms();
     } else if (k === 'count' && ui.sheet) {
       ui.sheet.count = parseInt(t.value, 10) || 0;
+    } else if (k === 'paste' && ui.paste) {
+      ui.paste.text = t.value;
     }
   });
 
@@ -898,6 +939,7 @@
   };
   window.__onBack = function () {
     if (ui.sheet) { ui.sheet = null; renderLayer(); return true; }
+    if (ui.paste) { ui.paste = null; renderLayer(); return true; }
     if (ui.confirm) { ui.confirm = null; renderLayer(); return true; }
     if (run) { A['stop-ask'](); return true; }
     if (ui.screen) { ui.screen = null; render(); return true; }
@@ -905,6 +947,19 @@
     return false;
   };
   window.__q8 = { state: function () { return S; } };
+
+  // webversie: terug in beeld = hetzelfde als hervatten op Android; offline gebruik en updates
+  if (!HAS) {
+    var reloadLater = false;
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState !== 'visible') return;
+      if (reloadLater && !run) { location.reload(); return; }
+      window.__onResume();
+    });
+    W.registerWorker(function () {
+      if (run) reloadLater = true; else location.reload();
+    });
+  }
 
   // herinnering opnieuw doorgeven (na een update van de app) en starten
   if (S.reminder.enabled) B.setReminder(JSON.stringify(S.reminder));
